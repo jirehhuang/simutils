@@ -1,0 +1,327 @@
+#' Simulate across settings
+#'
+#' Simulates a simulation function across combinations of settings.
+#'
+#' @param sim_fn A simulation function.
+#' @param sim_id A character string representing the simulation ID.
+#' @param sim_dir A character string representing the directory path where simulations are stored.
+#' @param n_reps A positive integer representing the number of repetitions of \code{sim_fn} for each combination of settings.
+#' @param seed A list containing the simulation settings to be saved or validated.
+#' @param n_cores A positive integer representing the number of cores to use for execution. Set to -1 to automatically detect the number of cores.
+#' @param debug An integer for debugging level. Defaults to 1.
+#' @param ... Additional settings passed to \code{sim_fn}. \code{sim_fn} will be executed over each unique combination of settings. Optionally, a \code{sim_grid} data.frame object can be provided with the desired setting combinations.
+#' @return Returns list of simulation results.
+#' @examples
+#' ## Example simulation function
+#' sim_fn <- function(n, mean, sd){
+#'   Sys.sleep(1)
+#'   x <- rnorm(n = n, mean = mean, sd = sd)
+#'   data.frame(mean = mean(x),
+#'              sd = sd(x))
+#' }
+#' 
+#' ## Example execution using ... and single core
+#' res1 <- sim_across(sim_fn = sim_fn, sim_id = "example1", sim_dir = "inst/example",
+#'                    n_reps = 2, seed = 1, n_cores = 1,
+#'                    n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
+#'                    debug = 1)
+#' 
+#' ## Example execution using sim_grid and multicore
+#' sim_grid <- expand.grid(n = seq_len(2) * 10,
+#'                         mean = seq_len(2),
+#'                         sd = seq_len(2))
+#' 
+#' res2 <- sim_across(sim_fn = sim_fn, sim_id = "example2", sim_dir = "inst/example",
+#'                    n_reps = 2, seed = 1, n_cores = -1,
+#'                    sim_grid = sim_grid,
+#'                    debug = 1)
+#' 
+#' all.equal(res1, res2, check.attributes = FALSE)
+
+sim_across <- function(sim_fn,
+                       sim_id = time2id(),
+                       sim_dir = getwd(),
+                       n_reps = 1,
+                       seed = 1,
+                       n_cores = 1,
+                       debug = 1,
+                       ...){
+  
+  
+  ## If sim_fn is missing, throw error
+  debug_cli(missing(sim_fn), cli::cli_abort,
+            "sim_fn must be provided")
+  
+  ## If directory sim_dir does not exist, throw error
+  debug_cli(!dir.exists(sim_dir), cli::cli_abort,
+            "sim_dir = {sim_dir} does not exist", 
+            .envir = environment())
+  
+  ## If n_reps is not a positive integer, throw error
+  debug_cli(n_reps != round(n_reps) || n_reps < 1, cli::cli_abort,
+            "n_reps = {n_reps} is invalid: must be a positive integer", 
+            .envir = environment())
+  
+  ## Validate seed; coerce to a valid value if necessary
+  seed <- head(validate_seed(seed), 1)
+  
+  ## Validate n_cores; coerce to a valid value if necessary
+  n_cores <- validate_n_cores(n_cores = n_cores)
+  
+  ## If debug is not a vector of length 1, throw error
+  debug_cli(!is.vector(debug) || length(debug) != 1, cli::cli_abort,
+            "debug = {debug} is invalid: must be a vector of length 1", 
+            .envir = environment())
+  
+  
+  ## If necessary, create simulation folder in directory
+  if (!dir.exists(file.path(sim_dir, sim_id))){
+    
+    dir.create(file.path(sim_dir, sim_id))
+  }
+  
+  
+  ## Create a list named `sim_settings` containing all arguments as named elements
+  ## except for debug, including those provided through "..." (ellipsis)
+  inputs <- list(sim_fn = sim_fn,
+                 sim_id = sim_id,
+                 sim_dir = sim_dir,
+                 n_cores = n_cores,
+                 n_reps = n_reps,
+                 seed0 = seed,
+                 debug = debug)
+  
+  ellipsis <- list(...)
+  
+  sim_settings <- c(inputs, ellipsis)
+  
+  ## Create simulation grid containing unique combinations of settings
+  sim_grid <- do.call(expand.grid, sim_settings[sapply(sim_settings, is.vector)])
+  
+  ## If sim_grid provided
+  if ("sim_grid" %in% names(sim_settings)){
+    
+    check_sim_grid(sim_grid = ellipsis$sim_grid)
+    
+    sim_grid <- merge(sim_grid, sim_settings$sim_grid, by = NULL)
+  }
+  
+  ## Create parameter grid
+  sim_par_grid <- sim_grid[, names(sim_grid) %in% names(formals(sim_fn))]
+  
+  ## Subset to unique parameter values
+  unique_rows <- !duplicated(sim_par_grid)
+  sim_grid <- sim_grid[unique_rows,,drop = FALSE]
+  sim_par_grid <- sim_par_grid[unique_rows,,drop = FALSE]
+  
+  ## Restrict n_cores to at most the number of unique settings
+  n_cores <- min(n_cores, nrow(sim_grid))
+  
+  ## Use overall seed to generate seeds for each combination of settings
+  set.seed(seed)
+  sim_grid$seed1 <- sample(.Machine$integer.max, nrow(sim_grid))
+  
+  ## Include in sim_settings for convenience and archival purposes
+  sim_settings$sim_grid <- sim_grid
+  
+  
+  ## Use check_sim_id() to check sim_id, sim_dir, and sim_settings
+  check_sim_id(sim_id = sim_id,
+               sim_dir = sim_dir,
+               sim_settings = sim_settings,
+               debug = debug)
+  
+  
+  ## Other simulation objects
+  pad_width_i <- nchar(nrow(sim_grid))
+  
+  
+  ## Create simulation wrapper function
+  sim_fn_ <- function(i, sim_grid, ...){
+    
+    tryCatch({
+      
+      ## Prepare arguments: formals of sim_fn_() and sim_fn()
+      seed_i <- sim_grid$seed1[i]
+      sim_args <- as.list(sim_grid[i,])[names(sim_grid) %in% names(formals(sim_fn))]
+      
+      ## Simulation number and file/folder names
+      pad_i <- stringr::str_pad(i, width = pad_width_i, side = "left", pad = "0")  # left pad with 0's
+      file_i <- file.path(sim_dir, sim_id, sprintf("%s.rds", pad_i))
+      temp_i <- gsub("\\.rds", ".tmp", file_i)
+      dir_i <- gsub("\\.rds", "", file_i)
+      
+      debug_cli(debug, cli::cli_alert,
+                "executing {pad_i}", .envir = environment())
+      
+      ## If completed, skip next
+      if (file.exists(file_i)) return(invisible(FALSE))
+      
+      ## Set seed
+      set.seed(seed_i)
+      
+      ## If n_reps == 1
+      if (n_reps == 1){
+        
+        ## If in progress, skip next
+        if (file.exists(temp_i)) next
+        
+        ## Write temp file to indicate in progress
+        write.table(0, file = temp_i, row.names = FALSE, col.names = FALSE)
+        
+        ## Execute simulation function
+        res_i <- do.call(sim_fn, sim_args)
+        
+        ## write sub-task result and delete temp file
+        saveRDS(object = res_i, file = file_i)
+        file.remove(temp_i)
+        
+      }  # Else (n_reps > 1)
+      else{
+        
+        ## If doesn't already exist, create folder for sub-tasks
+        if (!dir.exists(paths = dir_i)){
+          
+          dir.create(path = dir_i)
+        }
+        
+        ## Generate seeds for each repetition
+        seeds2 <- sample(.Machine$integer.max, n_reps)
+        
+        ## Pad width for repetitions
+        pad_width_j <- nchar(n_reps)
+        
+        ## For each repetition
+        for (j in seq_len(n_reps)){
+          
+          tryCatch({
+            
+            ## Sub-task number and file names
+            pad_ij <- sprintf("%s-%s", pad_i, stringr::str_pad(j, width = pad_width_j, side = "left", pad = "0"))
+            file_ij <- file.path(dir_i, sprintf("%s.rds", pad_ij))
+            temp_ij <- gsub("\\.rds", ".tmp", file_ij)
+            
+            debug_cli(debug, cli::cli_alert,
+                      "executing {pad_ij}", .envir = environment())
+            
+            ## If file_i or file_ij exists (complete) or temp_ij exists (in progress), skip next
+            if (file.exists(file_i) || file.exists(file_ij) || file.exists(temp_ij)) next
+            
+            ## Write temp file to indicate sub-task in progress
+            write.table(0, file = temp_ij, row.names = FALSE, col.names = FALSE)
+            
+            ## Execute simulation function
+            res_ij <- do.call(sim_fn, sim_args)
+            
+            ## write sub-task result and delete temp file
+            saveRDS(object = res_ij, file = file_ij)
+            file.remove(temp_ij)
+            
+          }, error = function(err){
+            
+            debug_cli(TRUE, cli::cli_alert_danger,
+                      "error executing {pad_ij}: {as.character(err)}",
+                      .envir = environment())
+            
+            cat(sprintf("error executing %s: %s",
+                        pad_ij, as.character(err)), 
+                file = gsub("\\.tmp", ".err", temp_ij))
+          })
+        }  # End for j
+        
+        ## If all n_reps present, compile result if haven't already
+        
+      }  # End else (if n_reps > 1)
+      
+      ## If n_reps == 1, write task result delete temp file
+      if (n_reps == 1){
+        
+        saveRDS(object = res_i, file = file_i)
+        
+        file.remove(temp_i)
+        
+      }  # Else, if all n_reps present, compile result if necessary
+      else if (length(files_i <- list.files(dir_i, pattern = "\\.rds", full.names = TRUE)) == n_reps){
+        
+        ## Compile and write task result
+        res_i <- lapply(files_i, readRDS)
+        saveRDS(object = res_i, file = file_i)
+        
+        ## Delete sub-task folder
+        unlink(dir_i, recursive = TRUE)
+      }
+      
+      return(invisible(TRUE))
+      
+    }, error = function(err){
+      
+      debug_cli(TRUE, cli::cli_alert_danger,
+                "error executing {pad_i}: {as.character(err)}",
+                .envir = environment())
+      
+      cat(sprintf("error executing %s: %s",
+                  pad_i, as.character(err)), 
+          file = gsub("\\.tmp", ".err", temp_i))
+      
+      return(invisible(FALSE))
+    })
+  }  # End sim_fn_()
+  
+  
+  ## Start timer
+  start_time <- Sys.time()
+  job_id <- time2id(time = start_time)
+  cat(glue::glue("Job ID:      {job_id}
+                  Start time:  {format(start_time, '%Y-%m-%d %H:%M:%S %Z')}
+                  End time:    
+                  Run time:    "),
+      file = (job_file <- file.path(sim_dir, sim_id, sprintf("job_%s.txt", job_id))))
+  
+  
+  ## Execute, in parallel if possible
+  if (Sys.info()[["sysname"]] == "Windows" && n_cores > 1){
+    
+    cl <- parallel::makeCluster(spec = getOption("cl.cores", n_cores))
+    
+    executed <- parallel::parLapply(cl = cl,
+                                    X = seq_len(nrow(sim_grid)),
+                                    fun = sim_fn_,
+                                    sim_grid = sim_grid)
+    
+    parallel::stopCluster(cl)
+    
+  } else{
+    
+    executed <- parallel::mclapply(X = seq_len(nrow(sim_grid)),
+                                   FUN = sim_fn_,
+                                   sim_grid = sim_grid, 
+                                   mc.preschedule = FALSE, 
+                                   mc.cores = n_cores)
+  }
+  
+  
+  ## End timer
+  if (any(unlist(executed))){
+    
+    end_time <- Sys.time()
+    run_time <- prettyunits::pretty_sec(as.numeric(end_time - start_time, unit = "secs"))
+    cat(glue::glue("Job ID:      {job_id}
+                  Start time:  {format(start_time, '%Y-%m-%d %H:%M:%S %Z')}
+                  End time:    {format(end_time, '%Y-%m-%d %H:%M:%S %Z')}
+                  Run time:    {run_time}"),
+        file = job_file)
+    
+  } else{
+    
+    file.remove(job_file)
+  }
+  
+  
+  ## Return existing simulation results
+  res <- lapply(list.files(file.path(sim_dir, sim_id), 
+                           pattern = "^\\d+\\.rds", full.names = TRUE), readRDS)
+  attr(res, 
+       "sim_settings") <- sim_settings
+  
+  return(invisible(res))
+}

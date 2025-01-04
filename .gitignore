@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+test/
+example/
+*scratch*
+*.Rproj
+README.Rmd
+README.html
