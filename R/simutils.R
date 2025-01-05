@@ -311,7 +311,8 @@ sim_across <- function(sim_fn,
   ## Execute, in parallel if possible
   if (Sys.info()[["sysname"]] == "Windows" && n_cores > 1){
     
-    cl <- parallel::makeCluster(spec = getOption("cl.cores", n_cores))
+    cl <- parallel::makeCluster(spec = getOption("cl.cores", n_cores),
+                                outfile = gsub("job_", "log_", job_file))
     
     executed <- parallel::parLapply(cl = cl,
                                     X = X,
