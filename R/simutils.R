@@ -7,13 +7,14 @@
 #' @param n_reps A positive integer representing the number of repetitions of \code{sim_fn} for each combination of settings.
 #' @param seed A list containing the simulation settings to be saved or validated.
 #' @param n_cores A positive integer representing the number of cores to use for execution. Set to -1 to automatically detect the number of cores.
+#' @param mc_method A character value representing the multicore execution method. "basic" allocates one core to each unique combination of settings, whereas "redundant" will give every core an opportunity to work on each setting combination.
 #' @param debug An integer for debugging level. Defaults to 1.
 #' @param ... Additional settings passed to \code{sim_fn}. \code{sim_fn} will be executed over each unique combination of settings. Optionally, a \code{sim_grid} data.frame object can be provided with the desired setting combinations.
 #' @return Returns list of simulation results.
 #' @examples
 #' ## Example simulation function
 #' sim_fn <- function(n, mean, sd){
-#'   Sys.sleep(1)
+#'   Sys.sleep(0.5)
 #'   x <- rnorm(n = n, mean = mean, sd = sd)
 #'   data.frame(mean = mean(x),
 #'              sd = sd(x))
@@ -21,21 +22,27 @@
 #' 
 #' ## Example execution using ... and single core
 #' res1 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example1",
-#'                    n_reps = 2, seed = 1, n_cores = 1,
+#'                    n_reps = 16, seed = 1, n_cores = 1,
 #'                    n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
 #'                    debug = 1)
 #' 
-#' ## Example execution using sim_grid and multicore
+#' ## Example execution using sim_grid and basic multicore
 #' sim_grid <- expand.grid(n = seq_len(2) * 10,
 #'                         mean = seq_len(2),
 #'                         sd = seq_len(2))
 #' 
 #' res2 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example2",
-#'                    n_reps = 2, seed = 1, n_cores = -1,
+#'                    n_reps = 16, seed = 1, n_cores = -1, mc_method = "basic",
 #'                    sim_grid = sim_grid,
 #'                    debug = 1)
 #' 
 #' all.equal(res1, res2, check.attributes = FALSE)
+#' 
+#' ## Example execution using ... and redundant multicore
+#' res3 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example3",
+#'                    n_reps = 16, seed = 1, n_cores = -1, mc_method = "redundant",
+#'                    n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
+#'                    debug = 1)
 #' @export
 
 sim_across <- function(sim_fn,
@@ -43,6 +50,7 @@ sim_across <- function(sim_fn,
                        n_reps = 1,
                        seed = 1,
                        n_cores = 1,
+                       mc_method = c("basic", "redundant"),
                        debug = 1,
                        ...){
   
@@ -52,14 +60,13 @@ sim_across <- function(sim_fn,
   job_id <- time2id(time = start_time)
   
   
+  ## ================================================================================##
+  ## Check arguments
+  ## ================================================================================##
+  
   ## If sim_fn is missing, throw error
   debug_cli(missing(sim_fn), cli::cli_abort,
             "sim_fn must be provided")
-  
-  ## If parent directory does not exist, throw error
-  # debug_cli(!dir.exists(dirname(sim_dir)), cli::cli_abort,
-  #           "dirname(sim_dir) = {dirname(sim_dir)} does not exist", 
-  #           .envir = environment())
   
   ## If n_reps is not a positive integer, throw error
   debug_cli(n_reps != round(n_reps) || n_reps < 1, cli::cli_abort,
@@ -72,18 +79,27 @@ sim_across <- function(sim_fn,
   ## Validate n_cores; coerce to a valid value if necessary
   n_cores <- validate_n_cores(n_cores = n_cores)
   
+  ## Check multicore method, overriding to "basic" if necessary
+  mc_method <- match.arg(mc_method)
+
+  if (mc_method != "basic" && n_reps == 1){
+    
+    debug_cli(TRUE, cli::cli_alert_warning,
+              "mc_method = {mc_method} is not applicable when n_reps == 1",
+              .envir = environment())
+    
+    mc_method <- "basic"
+  }
+  
   ## If debug is not a vector of length 1, throw error
   debug_cli(!is.vector(debug) || length(debug) != 1, cli::cli_abort,
             "debug = {debug} is invalid: must be a vector of length 1", 
             .envir = environment())
   
   
-  ## If necessary, create simulation folder in directory
-  # if (!dir.exists(sim_dir)){
-  #   
-  #   dir.create(sim_dir)
-  # }
-  
+  ## ================================================================================##
+  ## Initialize
+  ## ================================================================================##
   
   ## Create a list named `sim_settings` containing all arguments as named elements
   ## except for debug, including those provided through "..." (ellipsis)
@@ -117,8 +133,11 @@ sim_across <- function(sim_fn,
   sim_grid <- sim_grid[unique_rows,,drop = FALSE]
   sim_par_grid <- sim_par_grid[unique_rows,,drop = FALSE]
   
-  ## Restrict n_cores to at most the number of unique settings
-  n_cores <- min(n_cores, nrow(sim_grid))
+  ## If basic execution, restrict n_cores to at most the number of unique settings
+  if (mc_method %in% c("basic")){
+    
+    n_cores <- min(n_cores, nrow(sim_grid))
+  }
   
   ## Use overall seed to generate seeds for each combination of settings
   set.seed(seed)
@@ -270,6 +289,10 @@ sim_across <- function(sim_fn,
   }  # End sim_fn_()
   
   
+  ## ================================================================================##
+  ## Execute simulation
+  ## ================================================================================##
+  
   ## Write timer
   cat(glue::glue("Job ID:      {job_id}
                   Start time:  {format(start_time, '%Y-%m-%d %H:%M:%S %Z')}
@@ -278,13 +301,20 @@ sim_across <- function(sim_fn,
       file = (job_file <- file.path(sim_dir, sprintf("job_%s.txt", job_id))))
   
   
+  ## Set indices to execute over based on mc_method
+  X <- seq_len(nrow(sim_grid))
+  X <- switch(mc_method,
+              redundant = rep(seq_len(nrow(sim_grid)), each = n_cores),
+              X)  # default basic
+  
+  
   ## Execute, in parallel if possible
   if (Sys.info()[["sysname"]] == "Windows" && n_cores > 1){
     
     cl <- parallel::makeCluster(spec = getOption("cl.cores", n_cores))
     
     executed <- parallel::parLapply(cl = cl,
-                                    X = seq_len(nrow(sim_grid)),
+                                    X = X,
                                     fun = sim_fn_,
                                     sim_grid = sim_grid)
     
@@ -292,13 +322,12 @@ sim_across <- function(sim_fn,
     
   } else{
     
-    executed <- parallel::mclapply(X = seq_len(nrow(sim_grid)),
+    executed <- parallel::mclapply(X = X,
                                    FUN = sim_fn_,
                                    sim_grid = sim_grid, 
                                    mc.preschedule = FALSE, 
                                    mc.cores = n_cores)
   }
-  
   
   ## End timer
   if (any(unlist(executed))){

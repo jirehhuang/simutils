@@ -10,6 +10,7 @@ sim_across(
   n_reps = 1,
   seed = 1,
   n_cores = 1,
+  mc_method = c("basic", "redundant"),
   debug = 1,
   ...
 )
@@ -25,6 +26,8 @@ sim_across(
 
 \item{n_cores}{A positive integer representing the number of cores to use for execution. Set to -1 to automatically detect the number of cores.}
 
+\item{mc_method}{A character value representing the multicore execution method. "basic" allocates one core to each unique combination of settings, whereas "redundant" will give every core an opportunity to work on each setting combination.}
+
 \item{debug}{An integer for debugging level. Defaults to 1.}
 
 \item{...}{Additional settings passed to \code{sim_fn}. \code{sim_fn} will be executed over each unique combination of settings. Optionally, a \code{sim_grid} data.frame object can be provided with the desired setting combinations.}
@@ -38,7 +41,7 @@ Simulates a simulation function across combinations of settings.
 \examples{
 ## Example simulation function
 sim_fn <- function(n, mean, sd){
-  Sys.sleep(1)
+  Sys.sleep(0.5)
   x <- rnorm(n = n, mean = mean, sd = sd)
   data.frame(mean = mean(x),
              sd = sd(x))
@@ -46,19 +49,25 @@ sim_fn <- function(n, mean, sd){
 
 ## Example execution using ... and single core
 res1 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example1",
-                   n_reps = 2, seed = 1, n_cores = 1,
+                   n_reps = 16, seed = 1, n_cores = 1,
                    n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
                    debug = 1)
 
-## Example execution using sim_grid and multicore
+## Example execution using sim_grid and basic multicore
 sim_grid <- expand.grid(n = seq_len(2) * 10,
                         mean = seq_len(2),
                         sd = seq_len(2))
 
 res2 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example2",
-                   n_reps = 2, seed = 1, n_cores = -1,
+                   n_reps = 16, seed = 1, n_cores = -1, mc_method = "basic",
                    sim_grid = sim_grid,
                    debug = 1)
 
 all.equal(res1, res2, check.attributes = FALSE)
+
+## Example execution using ... and redundant multicore
+res3 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example3",
+                   n_reps = 16, seed = 1, n_cores = -1, mc_method = "redundant",
+                   n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
+                   debug = 1)
 }
