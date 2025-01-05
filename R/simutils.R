@@ -47,6 +47,11 @@ sim_across <- function(sim_fn,
                        ...){
   
   
+  ## Start timer
+  start_time <- Sys.time()
+  job_id <- time2id(time = start_time)
+  
+  
   ## If sim_fn is missing, throw error
   debug_cli(missing(sim_fn), cli::cli_abort,
             "sim_fn must be provided")
@@ -265,9 +270,7 @@ sim_across <- function(sim_fn,
   }  # End sim_fn_()
   
   
-  ## Start timer
-  start_time <- Sys.time()
-  job_id <- time2id(time = start_time)
+  ## Write timer
   cat(glue::glue("Job ID:      {job_id}
                   Start time:  {format(start_time, '%Y-%m-%d %H:%M:%S %Z')}
                   End time:    
@@ -303,9 +306,9 @@ sim_across <- function(sim_fn,
     end_time <- Sys.time()
     run_time <- prettyunits::pretty_sec(as.numeric(end_time - start_time, unit = "secs"))
     cat(glue::glue("Job ID:      {job_id}
-                  Start time:  {format(start_time, '%Y-%m-%d %H:%M:%S %Z')}
-                  End time:    {format(end_time, '%Y-%m-%d %H:%M:%S %Z')}
-                  Run time:    {run_time}"),
+                    Start time:  {format(start_time, '%Y-%m-%d %H:%M:%S %Z')}
+                    End time:    {format(end_time, '%Y-%m-%d %H:%M:%S %Z')}
+                    Run time:    {run_time}"),
         file = job_file)
     
   } else{
