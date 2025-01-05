@@ -36,6 +36,7 @@
 #'                    debug = 1)
 #' 
 #' all.equal(res1, res2, check.attributes = FALSE)
+#' @export
 
 sim_across <- function(sim_fn,
                        sim_dir = file.path(getwd(), time2id()),
@@ -325,6 +326,7 @@ sim_across <- function(sim_fn,
 #'
 #' @param sim_dir A character string representing the directory path of the simulation. \code{dirname(sim_dir)} must exist, but \code{basename(sim_dir)} will be created if necessary.
 #' @return Returns list of simulation results.
+#' @export
 
 read_sim_dir <- function(sim_dir){
   
