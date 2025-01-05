@@ -324,7 +324,7 @@ sim_across <- function(sim_fn,
 #'
 #' Reads and returns results existing in a simulation directory.
 #'
-#' @param sim_dir A character string representing the directory path of the simulation. \code{dirname(sim_dir)} must exist, but \code{basename(sim_dir)} will be created if necessary.
+#' @param sim_dir A character string representing the directory path of the simulation.
 #' @return Returns list of simulation results.
 #' @export
 

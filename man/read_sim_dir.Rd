@@ -7,7 +7,7 @@
 read_sim_dir(sim_dir)
 }
 \arguments{
-\item{sim_dir}{A character string representing the directory path of the simulation. \code{dirname(sim_dir)} must exist, but \code{basename(sim_dir)} will be created if necessary.}
+\item{sim_dir}{A character string representing the directory path of the simulation.}
 }
 \value{
 Returns list of simulation results.
