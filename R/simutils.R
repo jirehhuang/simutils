@@ -338,3 +338,27 @@ read_sim_dir <- function(sim_dir){
   
   return(invisible(res))
 }
+
+
+
+#' Clear simulation directory
+#'
+#' Clears all temporary files (indicating in progress) from a simulation directory.
+#'
+#' @param sim_dir A character string representing the directory path of the simulation.
+#' @param debug An integer for debugging level. Defaults to 1.
+#' @return Returns (invisibly) the output of \code{file.remove()}.
+#' @export
+
+clear_sim_dir <- function(sim_dir,
+                          debug = 1){
+  
+  tmp_files <- list.files(sim_dir, pattern = "\\.tmp", 
+                          all.files = TRUE, recursive = TRUE, full.names = TRUE)
+  
+  debug_cli(length(tmp_files) && debug, cli::cli_alert_info,
+            "deleting {length(tmp_files)} .tmp file{ifelse(length(tmp_files) == 1, '', 's')}: {tmp_files}",
+            .envir = environment())
+  
+  return(invisible(file.remove(tmp_files)))
+}
