@@ -6,8 +6,7 @@
 \usage{
 sim_across(
   sim_fn,
-  sim_id = time2id(),
-  sim_dir = getwd(),
+  sim_dir = file.path(getwd(), time2id()),
   n_reps = 1,
   seed = 1,
   n_cores = 1,
@@ -18,9 +17,7 @@ sim_across(
 \arguments{
 \item{sim_fn}{A simulation function.}
 
-\item{sim_id}{A character string representing the simulation ID.}
-
-\item{sim_dir}{A character string representing the directory path where simulations are stored.}
+\item{sim_dir}{A character string representing the directory path of the simulation. \code{dirname(sim_dir)} must exist, but \code{basename(sim_dir)} will be created if necessary.}
 
 \item{n_reps}{A positive integer representing the number of repetitions of \code{sim_fn} for each combination of settings.}
 
@@ -48,7 +45,7 @@ sim_fn <- function(n, mean, sd){
 }
 
 ## Example execution using ... and single core
-res1 <- sim_across(sim_fn = sim_fn, sim_id = "example1", sim_dir = "inst/example",
+res1 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example1",
                    n_reps = 2, seed = 1, n_cores = 1,
                    n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
                    debug = 1)
@@ -58,7 +55,7 @@ sim_grid <- expand.grid(n = seq_len(2) * 10,
                         mean = seq_len(2),
                         sd = seq_len(2))
 
-res2 <- sim_across(sim_fn = sim_fn, sim_id = "example2", sim_dir = "inst/example",
+res2 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example2",
                    n_reps = 2, seed = 1, n_cores = -1,
                    sim_grid = sim_grid,
                    debug = 1)

@@ -3,8 +3,7 @@
 #' Simulates a simulation function across combinations of settings.
 #'
 #' @param sim_fn A simulation function.
-#' @param sim_id A character string representing the simulation ID.
-#' @param sim_dir A character string representing the directory path where simulations are stored.
+#' @param sim_dir A character string representing the directory path of the simulation. \code{dirname(sim_dir)} must exist, but \code{basename(sim_dir)} will be created if necessary.
 #' @param n_reps A positive integer representing the number of repetitions of \code{sim_fn} for each combination of settings.
 #' @param seed A list containing the simulation settings to be saved or validated.
 #' @param n_cores A positive integer representing the number of cores to use for execution. Set to -1 to automatically detect the number of cores.
@@ -21,7 +20,7 @@
 #' }
 #' 
 #' ## Example execution using ... and single core
-#' res1 <- sim_across(sim_fn = sim_fn, sim_id = "example1", sim_dir = "inst/example",
+#' res1 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example1",
 #'                    n_reps = 2, seed = 1, n_cores = 1,
 #'                    n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
 #'                    debug = 1)
@@ -31,7 +30,7 @@
 #'                         mean = seq_len(2),
 #'                         sd = seq_len(2))
 #' 
-#' res2 <- sim_across(sim_fn = sim_fn, sim_id = "example2", sim_dir = "inst/example",
+#' res2 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example2",
 #'                    n_reps = 2, seed = 1, n_cores = -1,
 #'                    sim_grid = sim_grid,
 #'                    debug = 1)
@@ -39,8 +38,7 @@
 #' all.equal(res1, res2, check.attributes = FALSE)
 
 sim_across <- function(sim_fn,
-                       sim_id = time2id(),
-                       sim_dir = getwd(),
+                       sim_dir = file.path(getwd(), time2id()),
                        n_reps = 1,
                        seed = 1,
                        n_cores = 1,
@@ -52,10 +50,10 @@ sim_across <- function(sim_fn,
   debug_cli(missing(sim_fn), cli::cli_abort,
             "sim_fn must be provided")
   
-  ## If directory sim_dir does not exist, throw error
-  debug_cli(!dir.exists(sim_dir), cli::cli_abort,
-            "sim_dir = {sim_dir} does not exist", 
-            .envir = environment())
+  ## If parent directory does not exist, throw error
+  # debug_cli(!dir.exists(dirname(sim_dir)), cli::cli_abort,
+  #           "dirname(sim_dir) = {dirname(sim_dir)} does not exist", 
+  #           .envir = environment())
   
   ## If n_reps is not a positive integer, throw error
   debug_cli(n_reps != round(n_reps) || n_reps < 1, cli::cli_abort,
@@ -75,16 +73,15 @@ sim_across <- function(sim_fn,
   
   
   ## If necessary, create simulation folder in directory
-  if (!dir.exists(file.path(sim_dir, sim_id))){
-    
-    dir.create(file.path(sim_dir, sim_id))
-  }
+  # if (!dir.exists(sim_dir)){
+  #   
+  #   dir.create(sim_dir)
+  # }
   
   
   ## Create a list named `sim_settings` containing all arguments as named elements
   ## except for debug, including those provided through "..." (ellipsis)
   inputs <- list(sim_fn = sim_fn,
-                 sim_id = sim_id,
                  sim_dir = sim_dir,
                  n_cores = n_cores,
                  n_reps = n_reps,
@@ -125,11 +122,10 @@ sim_across <- function(sim_fn,
   sim_settings$sim_grid <- sim_grid
   
   
-  ## Use check_sim_id() to check sim_id, sim_dir, and sim_settings
-  check_sim_id(sim_id = sim_id,
-               sim_dir = sim_dir,
-               sim_settings = sim_settings,
-               debug = debug)
+  ## Check contents of sim_dir against sim_settings, creating sim_dir if necessary
+  check_sim_dir(sim_dir,
+                sim_settings = sim_settings,
+                debug = debug)
   
   
   ## Other simulation objects
@@ -147,7 +143,7 @@ sim_across <- function(sim_fn,
       
       ## Simulation number and file/folder names
       pad_i <- stringr::str_pad(i, width = pad_width_i, side = "left", pad = "0")  # left pad with 0's
-      file_i <- file.path(sim_dir, sim_id, sprintf("%s.rds", pad_i))
+      file_i <- file.path(sim_dir, sprintf("%s.rds", pad_i))
       temp_i <- gsub("\\.rds", ".tmp", file_i)
       dir_i <- gsub("\\.rds", "", file_i)
       
@@ -275,7 +271,7 @@ sim_across <- function(sim_fn,
                   Start time:  {format(start_time, '%Y-%m-%d %H:%M:%S %Z')}
                   End time:    
                   Run time:    "),
-      file = (job_file <- file.path(sim_dir, sim_id, sprintf("job_%s.txt", job_id))))
+      file = (job_file <- file.path(sim_dir, sprintf("job_%s.txt", job_id))))
   
   
   ## Execute, in parallel if possible
@@ -318,7 +314,7 @@ sim_across <- function(sim_fn,
   
   
   ## Return existing simulation results
-  res <- lapply(list.files(file.path(sim_dir, sim_id), 
+  res <- lapply(list.files(sim_dir, 
                            pattern = "^\\d+\\.rds", full.names = TRUE), readRDS)
   attr(res, 
        "sim_settings") <- sim_settings

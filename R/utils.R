@@ -204,39 +204,42 @@ validate_n_cores <- function(n_cores){
 #' folder does not exist, it creates the folder and saves the provided settings. If the folder exists,
 #' it validates the settings file.
 #'
-#' @param sim_id A character string representing the simulation ID.
-#' @param sim_dir A character string representing the directory path where simulations are stored.
+#' @param sim_dir A character string representing the directory path of the simulation. \code{dirname(sim_dir)} must exist, but \code{basename(sim_dir)} will be created if necessary.
 #' @param sim_settings A list containing the simulation settings to be saved or validated.
 #' @param debug An integer for debugging level. Defaults to 0 (no debugging).
 #' @return Returns `TRUE` invisibly if all checks pass.
 #' @noRd
 
-check_sim_id <- function(sim_id,
-                         sim_dir,
-                         sim_settings,
-                         debug = 0){
+check_sim_dir <- function(sim_dir,
+                          sim_settings,
+                          debug = 0){
   
-  sim_dir_id <- file.path(sim_dir, sim_id)
+  ## If parent directory does not exist, throw error
+  debug_cli(!dir.exists(dirname(sim_dir)), cli::cli_abort,
+            "dirname(sim_dir) = {dirname(sim_dir)} does not exist", 
+            .envir = environment())
   
-  if (!dir.exists(sim_dir_id) || length(list.files(sim_dir_id)) == 0){
+  ## If sim_dir exists or is empty
+  if (!dir.exists(sim_dir) || length(list.files(sim_dir)) == 0){
     
-    ## If necessary, create a folder named sim_id in sim_dir
-    if (!dir.exists(sim_dir_id)){
+    ## If necessary, create folder
+    if (!dir.exists(sim_dir)){
       
-      dir.create(sim_dir_id, recursive = TRUE)
+      dir.create(sim_dir)
     }
     
-    ## Save sim_settings in the sim_id folder as "sim_settings.rds"
-    saveRDS(sim_settings, file = file.path(sim_dir_id, "sim_settings.rds"))
+    ## Save sim_settings in sim_dir as "sim_settings.rds"
+    saveRDS(sim_settings, file = file.path(sim_dir, "sim_settings.rds"))
     
-  } else{
+  }  # Else
+  else{
     
-    debug_cli(!file.exists(file.path(sim_dir_id, "sim_settings.rds")), cli::cli_abort,
-              "folder {sim_id} exists and is non-empty, but {.file sim_settings.rds} is missing: please check and delete folder if necessary",
+    debug_cli(!file.exists(file.path(sim_dir, "sim_settings.rds")), cli::cli_abort,
+              "folder {basename(sim_dir)} exists and is non-empty, but {.file sim_settings.rds} is missing: please check and delete folder if necessary",
               .envir = environment())
     
     ## Read file "sim_settings.rds" as object named sim_settings0
-    sim_settings0 <- readRDS(file.path(sim_dir_id, "sim_settings.rds"))
+    sim_settings0 <- readRDS(file.path(sim_dir, "sim_settings.rds"))
     
     ## Compare the settings
     ae <- all.equal(sim_settings, sim_settings0)
