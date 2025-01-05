@@ -314,10 +314,25 @@ sim_across <- function(sim_fn,
   
   
   ## Return existing simulation results
+  return(invisible(read_sim_dir(sim_dir = sim_dir)))
+}
+
+
+
+#' Read simulation directory
+#'
+#' Reads and returns results existing in a simulation directory.
+#'
+#' @param sim_dir A character string representing the directory path of the simulation. \code{dirname(sim_dir)} must exist, but \code{basename(sim_dir)} will be created if necessary.
+#' @return Returns list of simulation results.
+
+read_sim_dir <- function(sim_dir){
+  
+  ## Return existing simulation results
   res <- lapply(list.files(sim_dir, 
                            pattern = "^\\d+\\.rds", full.names = TRUE), readRDS)
   attr(res, 
-       "sim_settings") <- sim_settings
+       "sim_settings") <- readRDS(file.path(sim_dir, "sim_settings.rds"))
   
   return(invisible(res))
 }
