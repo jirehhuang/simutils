@@ -190,10 +190,21 @@ sim_across <- function(sim_fn,
         ## Write temp file to indicate in progress
         write.table(0, file = temp_i, row.names = FALSE, col.names = FALSE)
         
+        ## Start timer for task
+        start_time_i <- Sys.time()
+        
         ## Execute simulation function
         res_i <- do.call(sim_fn, sim_args)
         
-        ## write sub-task result and delete temp file
+        ## Log time for task
+        end_time_i <- Sys.time()
+        run_time_i <- as.numeric(end_time_i - start_time_i, unit = "secs")
+        attributes(res_i) <- c(attributes(res_i), list(job_id = job_id,
+                                                       start_time = start_time_i,
+                                                       end_time = end_time_i,
+                                                       run_time = run_time_i))
+        
+        ## write task result and delete temp file
         saveRDS(object = res_i, file = file_i)
         file.remove(temp_i)
         
@@ -231,8 +242,19 @@ sim_across <- function(sim_fn,
             ## Write temp file to indicate sub-task in progress
             write.table(0, file = temp_ij, row.names = FALSE, col.names = FALSE)
             
+            ## Start timer for sub-task
+            start_time_ij <- Sys.time()
+            
             ## Execute simulation function
             res_ij <- do.call(sim_fn, sim_args)
+            
+            ## Log time for sub-task
+            end_time_ij <- Sys.time()
+            run_time_ij <- as.numeric(end_time_ij - start_time_ij, unit = "secs")
+            attributes(res_ij) <- c(attributes(res_ij), list(job_id = job_id,
+                                                             start_time = start_time_ij,
+                                                             end_time = end_time_ij,
+                                                             run_time = run_time_ij))
             
             ## write sub-task result and delete temp file
             saveRDS(object = res_ij, file = file_ij)
@@ -264,8 +286,18 @@ sim_across <- function(sim_fn,
       }  # Else, if all n_reps present, compile result if necessary
       else if (length(files_i <- list.files(dir_i, pattern = "\\.rds", full.names = TRUE)) == n_reps){
         
-        ## Compile and write task result
+        ## Compile sub-task results
         res_i <- lapply(files_i, readRDS)
+        
+        ## Compile metadata
+        for (k in c("job_id", "start_time", "end_time", "run_time")){
+          
+          attr(res_i, k) <- sapply(res_i, attr, k,
+                                   simplify = (k %in% c("job_id", "run_time")))
+        }
+        attr(res_i, "run_time") <- sum(attr(res_i, "run_time"))
+        
+        ## Write task result
         saveRDS(object = res_i, file = file_i)
         
         ## Delete sub-task folder
@@ -300,13 +332,11 @@ sim_across <- function(sim_fn,
                   Run time:    "),
       file = (job_file <- file.path(sim_dir, sprintf("job_%s.txt", job_id))))
   
-  
   ## Set indices to execute over based on mc_method
   X <- seq_len(nrow(sim_grid))
   X <- switch(mc_method,
               redundant = rep(seq_len(nrow(sim_grid)), each = n_cores),
               X)  # default basic
-  
   
   ## Execute, in parallel if possible
   if (Sys.info()[["sysname"]] == "Windows" && n_cores > 1){
