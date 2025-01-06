@@ -7,7 +7,7 @@
 #' @param n_reps A positive integer representing the number of repetitions of \code{sim_fn} for each combination of settings.
 #' @param seed A list containing the simulation settings to be saved or validated.
 #' @param n_cores A positive integer representing the number of cores to use for execution. Set to -1 to automatically detect the number of cores.
-#' @param mc_method A character value representing the multicore execution method. "basic" allocates one core to each unique combination of settings, whereas "redundant" will give every core an opportunity to work on each setting combination.
+#' @param mc_method A character value representing the multicore execution method. \code{"basic"} allocates one core to each unique combination of settings, whereas \code{"redundant"} will give every core an opportunity to work on each setting combination.
 #' @param debug An integer for debugging level. Defaults to 1.
 #' @param ... Additional settings passed to \code{sim_fn}. \code{sim_fn} will be executed over each unique combination of settings. Optionally, a \code{sim_grid} data.frame object can be provided with the desired setting combinations.
 #' @return Returns list of simulation results.

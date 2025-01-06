@@ -26,7 +26,7 @@ sim_across(
 
 \item{n_cores}{A positive integer representing the number of cores to use for execution. Set to -1 to automatically detect the number of cores.}
 
-\item{mc_method}{A character value representing the multicore execution method. "basic" allocates one core to each unique combination of settings, whereas "redundant" will give every core an opportunity to work on each setting combination.}
+\item{mc_method}{A character value representing the multicore execution method. \code{"basic"} allocates one core to each unique combination of settings, whereas \code{"redundant"} will give every core an opportunity to work on each setting combination.}
 
 \item{debug}{An integer for debugging level. Defaults to 1.}
 
@@ -70,4 +70,6 @@ res3 <- sim_across(sim_fn = sim_fn, sim_dir = "inst/example/example3",
                    n_reps = 16, seed = 1, n_cores = -1, mc_method = "redundant",
                    n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
                    debug = 1)
+
+all.equal(res2, res3, check.attributes = FALSE)
 }
