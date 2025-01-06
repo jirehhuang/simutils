@@ -282,32 +282,55 @@ sim_across <- function(sim_fn,
         
       }  # End else (if n_reps > 1)
       
-      ## If n_reps == 1, write task result delete temp file
+      ## If n_reps == 1, write task result and delete temp file
       if (n_reps == 1){
         
         saveRDS(object = res_i, file = file_i)
-        
         file.remove(temp_i)
         
-      }  # Else, if all n_reps present, compile result if necessary
-      else if (length(files_i <- list.files(dir_i, pattern = "\\.rds", full.names = TRUE)) == n_reps){
+      }  # Else compile
+      else{
         
-        ## Compile sub-task results
-        res_i <- lapply(files_i, readRDS)
-        
-        ## Compile metadata
-        for (k in c("job_id", "start_time", "end_time", "run_time")){
+        ## If all n_reps present, compile result if necessary
+        if (!file.exists(temp_i) && 
+            length(files_i <- list.files(dir_i, pattern = "\\.rds", full.names = TRUE)) == n_reps){
           
-          attr(res_i, k) <- sapply(res_i, attr, k,
-                                   simplify = (k %in% c("job_id", "run_time")))
+          ## Write temp file to indicate in progress
+          write.table(0, file = temp_i, row.names = FALSE, col.names = FALSE)
+          
+          ## Attempt multiple times, for robustness in case one of the files is still being written
+          for (k in seq_len(10)){
+            
+            tryCatch({
+              
+              ## Compile sub-task results
+              res_i <- lapply(files_i, readRDS)
+              
+            }, error = function(err){
+              
+              debug_cli(TRUE, cli::cli_alert_danger,
+                        "error compiling results for {pad_i}: {as.character(err)}",
+                        .envir = environment())
+              
+              ## Brief pause before reattempting
+              Sys.sleep(0.1)
+            })
+          }
+          
+          ## Compile metadata
+          for (k in c("job_id", "start_time", "end_time", "run_time")){
+            
+            attr(res_i, k) <- sapply(res_i, attr, k,
+                                     simplify = (k %in% c("job_id", "run_time")))
+          }
+          attr(res_i, "run_time") <- sum(attr(res_i, "run_time"))
+          
+          ## Write task result and delete temp file
+          saveRDS(object = res_i, file = file_i)
+          file.remove(temp_i)
         }
-        attr(res_i, "run_time") <- sum(attr(res_i, "run_time"))
-        
-        ## Write task result
-        saveRDS(object = res_i, file = file_i)
-        
-        ## Delete sub-task folder
-        unlink(dir_i, recursive = TRUE)
+        ## Delete sub-task folder if successfully compiled
+        if (file.exists(file_i)) unlink(dir_i, recursive = TRUE)
       }
       
       return(invisible(TRUE))
