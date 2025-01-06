@@ -43,6 +43,8 @@
 #'                    n_reps = 16, seed = 1, n_cores = -1, mc_method = "redundant",
 #'                    n = seq_len(2) * 10, mean = seq_len(2), sd = seq_len(2),
 #'                    debug = 1)
+#' 
+#' all.equal(res2, res3, check.attributes = FALSE)
 #' @export
 
 sim_across <- function(sim_fn,
@@ -245,6 +247,10 @@ sim_across <- function(sim_fn,
             ## Start timer for sub-task
             start_time_ij <- Sys.time()
             
+            ## Set seed
+            seed_ij <- seeds2[j]
+            set.seed(seed_ij)
+            
             ## Execute simulation function
             res_ij <- do.call(sim_fn, sim_args)
             
@@ -335,7 +341,7 @@ sim_across <- function(sim_fn,
   ## Set indices to execute over based on mc_method
   X <- seq_len(nrow(sim_grid))
   X <- switch(mc_method,
-              redundant = rep(seq_len(nrow(sim_grid)), each = n_cores),
+              redundant = rep(X, each = n_cores),
               X)  # default basic
   
   ## Execute, in parallel if possible
