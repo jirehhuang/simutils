@@ -172,11 +172,11 @@ sim_across <- function(sim_fn,
       temp_i <- gsub("\\.rds", ".tmp", file_i)
       dir_i <- gsub("\\.rds", "", file_i)
       
-      debug_cli(debug, cli::cli_alert,
-                "executing {pad_i}", .envir = environment())
-      
       ## If completed, skip next
       if (file.exists(file_i)) return(invisible(FALSE))
+      
+      debug_cli(debug, cli::cli_alert,
+                "executing {pad_i}", .envir = environment())
       
       ## Set seed
       set.seed(seed_i)
@@ -233,11 +233,11 @@ sim_across <- function(sim_fn,
             file_ij <- file.path(dir_i, sprintf("%s.rds", pad_ij))
             temp_ij <- gsub("\\.rds", ".tmp", file_ij)
             
-            debug_cli(debug, cli::cli_alert,
-                      "executing {pad_ij}", .envir = environment())
-            
             ## If file_i or file_ij exists (complete) or temp_ij exists (in progress), skip next
             if (file.exists(file_i) || file.exists(file_ij) || file.exists(temp_ij)) next
+            
+            debug_cli(debug, cli::cli_alert,
+                      "executing {pad_ij}", .envir = environment())
             
             ## Write temp file to indicate sub-task in progress
             write.table(0, file = temp_ij, row.names = FALSE, col.names = FALSE)
